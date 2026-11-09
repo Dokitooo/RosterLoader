@@ -1,0 +1,12 @@
+LIBRARY user32.dll
+EXPORTS
+    wsprintfA
+    wvsprintfA@12
+    MessageBoxA@16
+    CreateWindowExA@48
+    DestroyWindow@4
+    GetForegroundWindow@0
+    GetWindowThreadProcessId@8
+    GetAsyncKeyState@4
+    PostMessageA@16
+    IsWindow@4

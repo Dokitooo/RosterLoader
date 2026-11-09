@@ -1,0 +1,9 @@
+bin/
+build/obj/
+build/objp/
+*.obj
+*.exp
+*.lib
+*.asi
+__pycache__/
+out/
