@@ -2,13 +2,13 @@
 
 RosterLoader loads your roster when the game starts (about half a second, no boxes), hides the "2K Sports server is temporarily unavailable" box on the title page, and lets you set your own Play Now default teams. It is a [SLAM](https://github.com/Dokitooo/SLAM) mod.
 
-**Download:** [RosterLoader.zip](https://github.com/Dokitooo/RosterLoader/releases/latest/download/RosterLoader.zip) (latest release) ·
+**Download:** [RosterLoader_v1.0.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.0/RosterLoader_v1.0.zip) (latest release) ·
 [all releases](https://github.com/Dokitooo/RosterLoader/releases)
 
 ## Requirements
 
 - NBA 2K14 PC
-- [SLAM](https://github.com/Dokitooo/SLAM/releases/latest/download/SLAM.zip) 1.0.0 or newer
+- [SLAM](https://github.com/Dokitooo/SLAM/releases/download/v1.0.0/SLAM_v1.0.0.zip) 1.0.0 or newer
 
 ## Install
 
@@ -57,7 +57,7 @@ Every release lists the SHA-256 of the zip in `SHA256SUMS.txt` (also attached to
 Compare it with the hash of the file you downloaded:
 
 ```powershell
-Get-FileHash .\RosterLoader.zip -Algorithm SHA256
+Get-FileHash .\RosterLoader_v1.0.zip -Algorithm SHA256
 ```
 
 ```bash
