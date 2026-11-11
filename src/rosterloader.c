@@ -387,10 +387,11 @@ static void do_load(const char *why)
 
 
 /* ---- Default teams (Play Now / quick game): the game's own default is away Spurs (team ID 25) @ home Heat (10).
- * Team IDs are the number in the team's logo / uniform files (logo014.iff = Knicks 14). Two parts:
+ * Team IDs = the team's Graphics ID in the roster (76ers 0, Heat 10, Knicks 14, Spurs 25; also the number in its
+ * logo / uniform files, logo014.iff = Knicks 14). Two parts:
  *  1. the code that puts the default in a profile (8 places, "mov ecx,10 / call 5FE2A0" ... "mov ecx,25") gets the ini IDs;
  *  2. the profile already in memory gets them once the teams are loaded (profile +14 home / +18 away = team records). */
-static int cfg_home = 14, cfg_away = 25, g_teamsSet;
+static int cfg_home = 14, cfg_away = 25, g_teamsSet, g_teamsMiss;
 static const u32 kHomeSites[] = { 0x4A7750, 0x6035F0, 0x6038FF, 0x5E8527, 0xAC7B36, 0x4B9012, 0x5BD367, 0xB291EA };
 static const u32 kAwaySites[] = { 0x4A7761, 0x603601, 0x603910, 0x5E8538, 0xAC7B40, 0x4B902B, 0x5BD371, 0xB29200 };
 static void teams_patch(void)
@@ -420,6 +421,12 @@ static u32 team_rec(int id)             /* same search as the game's 0x5FE2A0 */
     for (i = 0; i < n; i++) if (rd32(base + i * 0x2F8 + 0x74, &v) && (v & 0xFFFF) == (u32)id) return base + i * 0x2F8;
     return 0;
 }
+static u32 teams_count(void)
+{
+    u32 g, t, n;
+    if (!rd32(0x1F207A8, &g) || !g || !rd32(g + 0x350CB0, &t) || !t || !rd32(t + 0x6C, &n) || n > 400) return 0;
+    return n;
+}
 static void teams_profile(void)         /* game thread (frontend tick) */
 {
     u32 g, prof, h, a, oh = 0, oa = 0;
@@ -427,6 +434,8 @@ static void teams_profile(void)         /* game thread (frontend tick) */
     if (!rd32(0x1F207A8, &g) || !g || !rd32(g + 0x350CAC, &prof) || !prof) return;
     prof += 0x28;                                                     /* profile 0 (0x00A09FD0) */
     h = team_rec(cfg_home); a = team_rec(cfg_away);
+    if ((!h || !a) && !g_teamsMiss && teams_count() >= 30 && GetTickCount() - g_t0 >= 8000) {   /* teams loaded, an ini ID is not in the roster */
+        g_teamsMiss = 1; rlog("DefaultTeams: no team with Graphics ID %d in this roster - Play Now teams not changed", !h ? cfg_home : cfg_away); }
     if (!h || !a || !rd32(prof + 0x14, &oh) || !rd32(prof + 0x18, &oa)) return;
     *(u32 *)(prof + 0x14) = h; *(u32 *)(prof + 0x18) = a; g_teamsSet = 1;
     rlog("DefaultTeams: Play Now starts with away %d @ home %d", cfg_away, cfg_home);
@@ -597,8 +606,8 @@ int mod_start(void)
     }
     cfg_home = (int)GetPrivateProfileIntA("RosterLoader", "DefaultHome", 14, ini);
     cfg_away = (int)GetPrivateProfileIntA("RosterLoader", "DefaultAway", 25, ini);
-    if (cfg_home <= 0 || cfg_home > 1000) cfg_home = 10;
-    if (cfg_away <= 0 || cfg_away > 1000) cfg_away = 25;
+    if (cfg_home < 0 || cfg_home > 1000) cfg_home = 10;      /* 0 is a real team (76ers) */
+    if (cfg_away < 0 || cfg_away > 1000) cfg_away = 25;
     if (cfg_delay < 0) cfg_delay = 0;
     for (i = 0; g_name[i] && i < MAX_PATH - 1; i++) g_wname[i] = (u8)g_name[i];
     g_wname[i] = 0;

@@ -3,6 +3,7 @@
 RosterLoader loads your roster when the game starts (about half a second, no boxes), hides the "2K Sports server is temporarily unavailable" box on the title page, and lets you set your own Play Now default teams. It is a [SLAM](https://github.com/Dokitooo/SLAM) mod.
 
 **Download:** [RosterLoader_v1.0.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.0/RosterLoader_v1.0.zip) (latest release) ·
+[RosterLoader_v1.0_plain.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.0/RosterLoader_v1.0_plain.zip) (plain `.asi`, no SLAM) ·
 [all releases](https://github.com/Dokitooo/RosterLoader/releases)
 
 ## Requirements
@@ -22,6 +23,8 @@ RosterLoader loads your roster when the game starts (about half a second, no box
 
 Set `AutoLoad=` in `RosterLoader.ini` to your `.ROS` file name from the Saves folder. The game window may be in the background while it boots (alt-tab); Enter reaches the game directly.
 
+Not using SLAM? `RosterLoader_v1.0_plain.zip` is the same mod as a plain `.asi` for any ASI loader. Put `plain\RosterLoader.asi` where your loader reads `.asi` files and the `plain\RosterLoader\` folder (the ini) next to it.
+
 The log is `SLAM\RosterLoader\RosterLoader.log`. To remove the mod, delete `SLAM\RosterLoader`.
 
 ## Settings (`RosterLoader.ini`)
@@ -34,7 +37,7 @@ The log is `SLAM\RosterLoader\RosterLoader.log`. To remove the mod, delete `SLAM
 | `Fast` | `1` = frames are not drawn while loading (fastest). `0` = black frames. |
 | `Warp` | The game clock runs this many times faster while loading (`1` = off). |
 | `HideServerMessage` | `1` = the title page's server box is not shown (the servers are gone). |
-| `DefaultHome / DefaultAway` | Play Now default teams by team ID, the number in the team's logo file (`logo014.iff` = 14). Heat 10, Knicks 14, Spurs 25. |
+| `DefaultHome / DefaultAway` | Play Now default teams by the team's Graphics ID in the roster, also the number in its logo file (`logo014.iff` = 14). 76ers 0, Heat 10, Knicks 14, Spurs 25. |
 
 ## Repository layout
 
