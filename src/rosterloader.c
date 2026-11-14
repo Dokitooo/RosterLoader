@@ -1,7 +1,9 @@
 /* RosterLoader - NBA 2K14: loads a saved roster (.ROS) at boot, through the game's own Load.
  *
  *   RosterLoader.ini  [RosterLoader]
- *     AutoLoad=KMTS2K 26v7 EX.ROS   roster file in the game's Saves folder (empty = off)
+ *     AutoLoad=KMTS2K 26v7 EX.ROS   roster file in the game's Saves folder (empty = the last roster you loaded, below)
+ *     AutoLoadLast=1                1.2: with AutoLoad empty, load the roster you loaded last time in the game
+ *     LastLoaded=...                1.2: written by RosterLoader whenever the game loads a .ROS
  *     Delay=0                       ms after the frontend starts (0 = its first frame, before the main menu is built)
  *     HidePopup=1                   the screen stays black while it loads (no "Loading Roster..." box)
  *
@@ -27,7 +29,7 @@ static char g_log[MAX_PATH], g_name[MAX_PATH];
 static u16 g_wname[MAX_PATH];
 static CRITICAL_SECTION g_lk;
 static void *g_origTick;
-static int cfg_delay, cfg_hide, g_done;
+static int cfg_delay, cfg_hide, g_done, cfg_last = 1;
 static DWORD g_t0;
 
 static void rlog(const char *fmt, ...)
@@ -387,11 +389,10 @@ static void do_load(const char *why)
 
 
 /* ---- Default teams (Play Now / quick game): the game's own default is away Spurs (team ID 25) @ home Heat (10).
- * Team IDs = the team's Graphics ID in the roster (76ers 0, Heat 10, Knicks 14, Spurs 25; also the number in its
- * logo / uniform files, logo014.iff = Knicks 14). Two parts:
+ * Team IDs are the number in the team's logo / uniform files (logo014.iff = Knicks 14). Two parts:
  *  1. the code that puts the default in a profile (8 places, "mov ecx,10 / call 5FE2A0" ... "mov ecx,25") gets the ini IDs;
  *  2. the profile already in memory gets them once the teams are loaded (profile +14 home / +18 away = team records). */
-static int cfg_home = 14, cfg_away = 25, g_teamsSet, g_teamsMiss;
+static int cfg_home = 14, cfg_away = 25, g_teamsSet;
 static const u32 kHomeSites[] = { 0x4A7750, 0x6035F0, 0x6038FF, 0x5E8527, 0xAC7B36, 0x4B9012, 0x5BD367, 0xB291EA };
 static const u32 kAwaySites[] = { 0x4A7761, 0x603601, 0x603910, 0x5E8538, 0xAC7B40, 0x4B902B, 0x5BD371, 0xB29200 };
 static void teams_patch(void)
@@ -421,12 +422,6 @@ static u32 team_rec(int id)             /* same search as the game's 0x5FE2A0 */
     for (i = 0; i < n; i++) if (rd32(base + i * 0x2F8 + 0x74, &v) && (v & 0xFFFF) == (u32)id) return base + i * 0x2F8;
     return 0;
 }
-static u32 teams_count(void)
-{
-    u32 g, t, n;
-    if (!rd32(0x1F207A8, &g) || !g || !rd32(g + 0x350CB0, &t) || !t || !rd32(t + 0x6C, &n) || n > 400) return 0;
-    return n;
-}
 static void teams_profile(void)         /* game thread (frontend tick) */
 {
     u32 g, prof, h, a, oh = 0, oa = 0;
@@ -434,8 +429,6 @@ static void teams_profile(void)         /* game thread (frontend tick) */
     if (!rd32(0x1F207A8, &g) || !g || !rd32(g + 0x350CAC, &prof) || !prof) return;
     prof += 0x28;                                                     /* profile 0 (0x00A09FD0) */
     h = team_rec(cfg_home); a = team_rec(cfg_away);
-    if ((!h || !a) && !g_teamsMiss && teams_count() >= 30 && GetTickCount() - g_t0 >= 8000) {   /* teams loaded, an ini ID is not in the roster */
-        g_teamsMiss = 1; rlog("DefaultTeams: no team with Graphics ID %d in this roster - Play Now teams not changed", !h ? cfg_home : cfg_away); }
     if (!h || !a || !rd32(prof + 0x14, &oh) || !rd32(prof + 0x18, &oa)) return;
     *(u32 *)(prof + 0x14) = h; *(u32 *)(prof + 0x18) = a; g_teamsSet = 1;
     rlog("DefaultTeams: Play Now starts with away %d @ home %d", cfg_away, cfg_home);
@@ -577,6 +570,102 @@ static DWORD WINAPI rs_keys(LPVOID u)
 }
 #endif
 
+/* ---------------- 1.2: remember the roster the game loads ----------------
+ * The game's own CreateFileA / ReadFile (import hooks, chained by SLAM with any other mod that follows them).
+ * A roster counts as loaded when 256 KB of one .ROS were read: the Load Roster list only reads the headers. */
+typedef HANDLE (WINAPI *CreateFileA_t)(LPCSTR, DWORD, DWORD, LPVOID, DWORD, DWORD, HANDLE);
+typedef BOOL (WINAPI *ReadFile_t)(HANDLE, LPVOID, DWORD, LPDWORD, LPVOID);
+typedef BOOL (WINAPI *CloseHandle_t)(HANDLE);
+static CreateFileA_t o_CreateFileA; static ReadFile_t o_ReadFile; static CloseHandle_t o_CloseHandle;
+typedef struct { HANDLE h; u32 bytes; int done; char key[MAX_PATH]; } Track;
+static Track g_tr[8];
+static CRITICAL_SECTION g_tlk;
+static char g_ini[MAX_PATH], g_lastSaved[MAX_PATH];
+#define LOAD_BYTES (256u * 1024u)
+
+static int ros_key(const char *path, char *key)      /* "...\Name.ROS" -> "Name.ROS"; 0 if not a .ROS */
+{
+    int n = lstrlenA(path), i, b = 0;
+    if (n < 5 || path[n - 4] != '.') return 0;
+    if ((path[n - 3] | 32) != 'r' || (path[n - 2] | 32) != 'o' || (path[n - 1] | 32) != 's') return 0;
+    for (i = 0; i < n; i++) if (path[i] == '\\' || path[i] == '/') b = i + 1;
+    lstrcpynA(key, path + b, MAX_PATH);
+    return 1;
+}
+
+static void on_roster_loaded(const char *key)
+{
+    if (!lstrcmpiA(key, g_lastSaved)) return;
+    lstrcpynA(g_lastSaved, key, MAX_PATH);
+    WritePrivateProfileStringA("RosterLoader", "LastLoaded", key, g_ini);
+    rlog("roster loaded in the game: \"%s\" (saved as LastLoaded)", key);
+}
+
+static HANDLE WINAPI hk_CreateFileA(LPCSTR n, DWORD acc, DWORD sh, LPVOID sa, DWORD disp, DWORD fl, HANDLE t)
+{
+    HANDLE h = o_CreateFileA(n, acc, sh, sa, disp, fl, t);
+    char key[MAX_PATH]; int i;
+    if (h != INVALID_HANDLE_VALUE && n && !(acc & GENERIC_WRITE) && ros_key(n, key)) {
+        EnterCriticalSection(&g_tlk);
+        for (i = 0; i < 8; i++) if (!g_tr[i].h) { g_tr[i].h = h; g_tr[i].bytes = 0; g_tr[i].done = 0; lstrcpynA(g_tr[i].key, key, MAX_PATH); break; }
+        LeaveCriticalSection(&g_tlk);
+    }
+    return h;
+}
+
+static BOOL WINAPI hk_ReadFile(HANDLE h, LPVOID b, DWORD n, LPDWORD rd, LPVOID ov)
+{
+    BOOL r = o_ReadFile(h, b, n, rd, ov); int i, fire = 0; char key[MAX_PATH];
+    if (r && h) {
+        EnterCriticalSection(&g_tlk);
+        for (i = 0; i < 8; i++) if (g_tr[i].h == h) {
+            g_tr[i].bytes += rd ? *rd : n;
+            if (!g_tr[i].done && g_tr[i].bytes >= LOAD_BYTES) { g_tr[i].done = 1; lstrcpynA(key, g_tr[i].key, MAX_PATH); fire = 1; }
+            break;
+        }
+        LeaveCriticalSection(&g_tlk);
+        if (fire) on_roster_loaded(key);
+    }
+    return r;
+}
+
+static BOOL WINAPI hk_CloseHandle(HANDLE h)
+{
+    int i;
+    if (h) { EnterCriticalSection(&g_tlk); for (i = 0; i < 8; i++) if (g_tr[i].h == h) { g_tr[i].h = 0; break; } LeaveCriticalSection(&g_tlk); }
+    return o_CloseHandle(h);
+}
+
+static int file_hook(const char *fn, void *hook, void **orig)
+{
+    int r;
+    if (!SLAM_HAS(g_slam, hook_import)) return 0;
+    r = g_slam->hook_import(g_slamMe, "KERNEL32.dll", fn, hook, orig);
+    if (r == SLAM_ERR_CONFLICT) rlog("WARNING another mod blocks the hook of %s", fn);
+    return r == SLAM_OK;
+}
+
+static void install_follow(void)
+{
+    int a, b;
+    InitializeCriticalSection(&g_tlk);
+    a = file_hook("CreateFileA", (void *)hk_CreateFileA, (void **)&o_CreateFileA);
+    b = file_hook("ReadFile", (void *)hk_ReadFile, (void **)&o_ReadFile);
+    file_hook("CloseHandle", (void *)hk_CloseHandle, (void **)&o_CloseHandle);
+    if (!o_CloseHandle) o_CloseHandle = (CloseHandle_t)GetProcAddress(GetModuleHandleA("kernel32.dll"), "CloseHandle");
+    if (!o_ReadFile) o_ReadFile = (ReadFile_t)GetProcAddress(GetModuleHandleA("kernel32.dll"), "ReadFile");
+    if (a && b) rlog("following the rosters you load in the game (for LastLoaded)");
+    else rlog("WARNING could not follow roster loads (CreateFileA %d, ReadFile %d) - LastLoaded is not updated", a, b);
+}
+
+static int roster_exists(const char *name)
+{
+    char p[MAX_PATH * 2]; DWORD n = GetEnvironmentVariableA("APPDATA", p, MAX_PATH);
+    if (!n || n >= MAX_PATH) return 1;               /* cannot tell: let the game try */
+    lstrcatA(p, "\\2K Sports\\NBA 2K14\\Saves\\"); lstrcatA(p, name);
+    return GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES;
+}
+
 int mod_start(void)
 {
     const char *ini;
@@ -585,8 +674,10 @@ int mod_start(void)
     lstrcpynA(g_log, g_slam->mod_dir(g_slamMe), MAX_PATH); lstrcatA(g_log, "RosterLoader.log"); DeleteFileA(g_log);
     rlog("RosterLoader " MOD_VERSION);
     ini = g_slam->mod_ini(g_slamMe);
+    lstrcpynA(g_ini, ini, MAX_PATH);
     if (GetFileAttributesA(ini) == INVALID_FILE_ATTRIBUTES) {
         WritePrivateProfileStringA("RosterLoader", "AutoLoad", "", ini);
+        WritePrivateProfileStringA("RosterLoader", "AutoLoadLast", "1", ini);
         WritePrivateProfileStringA("RosterLoader", "Delay", "0", ini);
         WritePrivateProfileStringA("RosterLoader", "HidePopup", "1", ini);
         WritePrivateProfileStringA("RosterLoader", "HideServerMessage", "1", ini);
@@ -595,6 +686,14 @@ int mod_start(void)
         rlog("RosterLoader.ini made - put your roster file name after AutoLoad=");
     }
     GetPrivateProfileStringA("RosterLoader", "AutoLoad", "", g_name, MAX_PATH, ini);
+    if (GetPrivateProfileIntA("RosterLoader", "AutoLoadLast", -1, ini) == (UINT)-1)        /* older ini: add the key */
+        WritePrivateProfileStringA("RosterLoader", "AutoLoadLast", "1", ini);
+    cfg_last = (int)GetPrivateProfileIntA("RosterLoader", "AutoLoadLast", 1, ini);
+    GetPrivateProfileStringA("RosterLoader", "LastLoaded", "", g_lastSaved, MAX_PATH, ini);
+    if (!g_name[0] && cfg_last && g_lastSaved[0]) {
+        if (roster_exists(g_lastSaved)) { lstrcpynA(g_name, g_lastSaved, MAX_PATH); rlog("AutoLoad is empty: loading the last roster you loaded (\"%s\")", g_name); }
+        else rlog("LastLoaded \"%s\" is not in the Saves folder any more - nothing to load", g_lastSaved);
+    }
     cfg_delay = (int)GetPrivateProfileIntA("RosterLoader", "Delay", 0, ini);
     cfg_hide = (int)GetPrivateProfileIntA("RosterLoader", "HidePopup", 1, ini);
     cfg_fast = (int)GetPrivateProfileIntA("RosterLoader", "Fast", 1, ini);
@@ -606,12 +705,14 @@ int mod_start(void)
     }
     cfg_home = (int)GetPrivateProfileIntA("RosterLoader", "DefaultHome", 14, ini);
     cfg_away = (int)GetPrivateProfileIntA("RosterLoader", "DefaultAway", 25, ini);
-    if (cfg_home < 0 || cfg_home > 1000) cfg_home = 10;      /* 0 is a real team (76ers) */
-    if (cfg_away < 0 || cfg_away > 1000) cfg_away = 25;
+    if (cfg_home <= 0 || cfg_home > 1000) cfg_home = 10;
+    if (cfg_away <= 0 || cfg_away > 1000) cfg_away = 25;
     if (cfg_delay < 0) cfg_delay = 0;
     for (i = 0; g_name[i] && i < MAX_PATH - 1; i++) g_wname[i] = (u8)g_name[i];
     g_wname[i] = 0;
-    if (!g_name[0]) rlog("AutoLoad is empty - nothing to load");
+    install_follow();
+    if (!g_name[0]) rlog(cfg_last ? "nothing to load yet - load a roster in the game once and it loads at every start"
+                                  : "AutoLoad is empty and AutoLoadLast=0 - nothing to load");
     else rlog("roster: \"%s\"  delay %d ms", g_name, cfg_delay);
 #ifdef RL_RESEARCH
     CreateThread(0, 0, rs_keys, 0, 0, 0);

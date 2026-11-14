@@ -53,3 +53,4 @@ EXPORTS
     AddVectoredExceptionHandler@8
     InterlockedIncrement@4
     GetSystemDirectoryA@8
+GetEnvironmentVariableA@12

@@ -1,9 +1,9 @@
-# RosterLoader 1.0 — your roster loaded at boot in NBA 2K14 (PC)
+# RosterLoader 1.2 — your roster loaded at boot in NBA 2K14 (PC)
 
-RosterLoader loads your roster when the game starts (about half a second, no boxes), hides the "2K Sports server is temporarily unavailable" box on the title page, and lets you set your own Play Now default teams. It is a [SLAM](https://github.com/Dokitooo/SLAM) mod.
+RosterLoader loads your roster when the game starts (about half a second, no boxes), remembers the roster you last loaded in the game, hides the "2K Sports server is temporarily unavailable" box on the title page, and lets you set your own Play Now default teams. It is a [SLAM](https://github.com/Dokitooo/SLAM) mod.
 
-**Download:** [RosterLoader_v1.0.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.0/RosterLoader_v1.0.zip) (latest release) ·
-[RosterLoader_v1.0_plain.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.0/RosterLoader_v1.0_plain.zip) (plain `.asi`, no SLAM) ·
+**Download:** [RosterLoader_v1.2.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.2/RosterLoader_v1.2.zip) (latest release) ·
+[RosterLoader_v1.2_plain.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.2/RosterLoader_v1.2_plain.zip) (plain `.asi`, no SLAM) ·
 [all releases](https://github.com/Dokitooo/RosterLoader/releases)
 
 ## Requirements
@@ -19,11 +19,11 @@ RosterLoader loads your roster when the game starts (about half a second, no box
    SLAM\RosterLoader\RosterLoader.asi
    SLAM\RosterLoader\RosterLoader.ini
    ```
-3. Start the game. The mod list at the top left shows `RosterLoader 1.0`.
+3. Start the game. The mod list at the top left shows `RosterLoader 1.2`.
 
-Set `AutoLoad=` in `RosterLoader.ini` to your `.ROS` file name from the Saves folder. The game window may be in the background while it boots (alt-tab); Enter reaches the game directly.
+Load your roster in the game once (Options > Load/Save > Load Roster): from then on it loads by itself at every start. To always load one fixed roster instead, set `AutoLoad=` in `RosterLoader.ini` to its `.ROS` file name from the Saves folder. The game window may be in the background while it boots (alt-tab); Enter reaches the game directly.
 
-Not using SLAM? `RosterLoader_v1.0_plain.zip` is the same mod as a plain `.asi` for any ASI loader. Put `plain\RosterLoader.asi` where your loader reads `.asi` files and the `plain\RosterLoader\` folder (the ini) next to it.
+Not using SLAM? `RosterLoader_v1.2_plain.zip` is the same mod as a plain `.asi` for any ASI loader. Put `plain\RosterLoader.asi` where your loader reads `.asi` files and the `plain\RosterLoader\` folder (the ini) next to it.
 
 The log is `SLAM\RosterLoader\RosterLoader.log`. To remove the mod, delete `SLAM\RosterLoader`.
 
@@ -31,13 +31,26 @@ The log is `SLAM\RosterLoader\RosterLoader.log`. To remove the mod, delete `SLAM
 
 | Setting | What it does |
 | --- | --- |
-| `AutoLoad` | Roster file in your Saves folder, loaded at boot. Empty = off. |
+| `AutoLoad` | Roster file in your Saves folder, loaded at boot. Wins over the remembered roster. Empty = the last roster you loaded in the game. |
+| `AutoLoadLast` | `1` = with `AutoLoad` empty, the roster you loaded last time loads at every start. `0` = off. |
+| `LastLoaded` | Written by RosterLoader whenever the game loads a roster. No need to edit it. |
 | `Delay` | Milliseconds after the menus start (0 = right away). |
 | `HidePopup` | `1` = no "Loading Roster" box (its Enter is pressed for you). `0` = the game's box. |
 | `Fast` | `1` = frames are not drawn while loading (fastest). `0` = black frames. |
 | `Warp` | The game clock runs this many times faster while loading (`1` = off). |
 | `HideServerMessage` | `1` = the title page's server box is not shown (the servers are gone). |
-| `DefaultHome / DefaultAway` | Play Now default teams by the team's Graphics ID in the roster, also the number in its logo file (`logo014.iff` = 14). 76ers 0, Heat 10, Knicks 14, Spurs 25. |
+| `DefaultHome / DefaultAway` | Play Now default teams by team ID, the number in the team's logo file (`logo014.iff` = 14). Heat 10, Knicks 14, Spurs 25. |
+
+## Changelog
+
+| Version | Date | Changes |
+| --- | --- | --- |
+| 1.2 | 2026-11-14 | Remembers the roster you load in the game and loads it at the next start (`AutoLoadLast`, `LastLoaded`); `AutoLoad` is empty by default |
+| 1.0 | 2026-11-09 | First release: roster at boot, no server box, Play Now default teams |
+
+## Credits
+
+- **Eddie 2K**
 
 ## Repository layout
 
@@ -60,7 +73,7 @@ Every release lists the SHA-256 of the zip in `SHA256SUMS.txt` (also attached to
 Compare it with the hash of the file you downloaded:
 
 ```powershell
-Get-FileHash .\RosterLoader_v1.0.zip -Algorithm SHA256
+Get-FileHash .\RosterLoader_v1.2.zip -Algorithm SHA256
 ```
 
 ```bash

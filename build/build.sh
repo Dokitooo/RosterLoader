@@ -4,7 +4,7 @@ set -e
 export PATH="/usr/lib/llvm-18/bin:$PATH"
 cd "$(dirname "$0")/.."
 : "${MGW:?}"; : "${GEN:?}"
-VER=${MOD_VERSION:-"1.0"}
+VER=${MOD_VERSION:-"1.2"}
 O=build/obj; mkdir -p $O bin/SLAM bin/plain
 for d in build/linux/*.def; do llvm-dlltool -m i386 -k -d $d -l $O/$(basename $d .def).lib; done
 CF="$EXTRA --target=i686-pc-windows-msvc /c /O2 /GS- /Gs999999 /Zl /W3 -fms-extensions -Islam"
