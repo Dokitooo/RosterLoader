@@ -50,7 +50,7 @@ The log is `SLAM\RosterLoader\RosterLoader.log`. To remove the mod, delete `SLAM
 
 ## Credits
 
-- **Eddie 2K**
+- **Eddie 2K**, for the idea of loading the roster by itself instead of doing it manually.
 
 ## Repository layout
 

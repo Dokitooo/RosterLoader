@@ -13,4 +13,4 @@ To always load one fixed roster instead: set AutoLoad= in RosterLoader.ini to it
 The game window may be in the background while it boots (alt-tab): Enter reaches the game directly.
 Log: RosterLoader\RosterLoader.log
 
-Credits: Eddie 2K.
+Credits: Eddie 2K, for the idea of loading the roster by itself instead of doing it manually.
