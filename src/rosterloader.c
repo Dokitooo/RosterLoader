@@ -2,8 +2,8 @@
  *
  *   RosterLoader.ini  [RosterLoader]
  *     AutoLoad=KMTS2K 26v7 EX.ROS   roster file in the game's Saves folder (empty = the last roster you loaded, below)
- *     AutoLoadLast=1                1.2: with AutoLoad empty, load the roster you loaded last time in the game
- *     LastLoaded=...                1.2: written by RosterLoader whenever the game loads a .ROS
+ *     AutoLoadLast=1                1.1: with AutoLoad empty, load the roster you loaded last time in the game
+ *     LastLoaded=...                1.1: written by RosterLoader whenever the game loads a .ROS
  *     Delay=0                       ms after the frontend starts (0 = its first frame, before the main menu is built)
  *     HidePopup=1                   the screen stays black while it loads (no "Loading Roster..." box)
  *
@@ -18,6 +18,7 @@
 #include <windows.h>
 #include "slam.h"
 #include <d3d9.h>
+#include "d3d9pick.h"
 
 extern const SLAM_API *g_slam; extern SlamMod *g_slamMe; extern void *g_slamInst;
 void glue_migrate(const char *file);
@@ -203,8 +204,9 @@ static HRESULT WINAPI MyPresent(void *dev, const RECT *a, const RECT *b, HWND w,
 static void hook_present(void)
 {
     typedef IDirect3D9 *(WINAPI *Create9_t)(UINT);
-    HMODULE d = LoadLibraryA("d3d9.dll"); Create9_t c9 = d ? (Create9_t)GetProcAddress(d, "Direct3DCreate9") : 0;
+    char why[400]; HMODULE d = d3d9_pick(why, sizeof why); Create9_t c9 = d ? (Create9_t)GetProcAddress(d, "Direct3DCreate9") : 0;
     IDirect3D9 *d3d; IDirect3DDevice9 *dev = 0; D3DPRESENT_PARAMETERS pp; HWND w; HRESULT hr; void *fn; int r, i;
+    if (why[0]) rlog("HidePopup: %s", why);
     if (!c9 || !(d3d = c9(D3D_SDK_VERSION))) { rlog("HidePopup: no Direct3D 9 - box stays"); return; }
     w = CreateWindowExA(0, "STATIC", "rl", WS_POPUP, 0, 0, 64, 64, 0, 0, 0, 0);
     for (i = 0; i < (int)sizeof pp; i++) ((u8 *)&pp)[i] = 0;
@@ -458,11 +460,40 @@ static const u8 kTick[] = { 0x51, 0x53, 0x55, 0x56, 0x8B, 0xE9, 0xE8 };
 static const u8 kLoad[] = { 0x53, 0x56, 0x8B, 0xF1, 0x57, 0x33, 0xDB };
 static int same(u32 a, const u8 *e, int n) { int i; for (i = 0; i < n; i++) if (((const u8 *)a)[i] != e[i]) return 0; return 1; }
 
-static void SLAM_CALL game_ready(void *u)
+static void setup(void);
+static volatile LONG g_setUp; static DWORD g_t0;
+/* 1.2: set up as soon as the game code is there - SLAM's "game ready" or our own check, whichever comes first.
+   Early = before the game makes its Direct3D device (a test device made after that fails in fullscreen). */
+static void setup_once(const char *who)
+{
+    int go;
+    EnterCriticalSection(&g_lk); go = !g_setUp; g_setUp = 1; LeaveCriticalSection(&g_lk);
+    if (!go) return;
+    rlog("set up: %s, %u ms after RosterLoader started", who, GetTickCount() - g_t0);
+    setup();
+}
+static void SLAM_CALL game_ready(void *u) { (void)u; setup_once("SLAM game ready"); }
+static int peek_same(u32 a, const u8 *e, int n)
+{
+    u8 t[16]; SIZE_T got = 0; int i;
+    if (!ReadProcessMemory(GetCurrentProcess(), (void *)a, t, (SIZE_T)n, &got) || got != (SIZE_T)n) return 0;
+    for (i = 0; i < n; i++) if (t[i] != e[i]) return 0;
+    return 1;
+}
+static DWORD WINAPI watch_code(void *u)
+{
+    int i;
+    (void)u;
+    for (i = 0; i < 12000 && !g_setUp; i++) {                 /* up to 2 minutes */
+        if (peek_same(0x4E0190, kTick, 7) && peek_same(0x4E9300, kLoad, 7)) { setup_once("game code found by RosterLoader"); break; }
+        Sleep(10);
+    }
+    return 0;
+}
+static void setup(void)
 {
     u8 *b = (u8 *)GetModuleHandleA(0); IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(b + ((IMAGE_DOS_HEADER *)b)->e_lfanew);
     int r;
-    (void)u;
     if (nt->FileHeader.TimeDateStamp != 0x52202C7Fu) { rlog("not the known NBA 2K14 exe (%08X) - off", nt->FileHeader.TimeDateStamp); return; }
     if (!same(0x4E0190, kTick, 7) || !same(0x4E9300, kLoad, 7)) { rlog("unexpected game code - off"); return; }
     r = g_slam->hook(g_slamMe, (void *)0x4E0190, (void *)FnTick, &g_origTick);
@@ -570,7 +601,7 @@ static DWORD WINAPI rs_keys(LPVOID u)
 }
 #endif
 
-/* ---------------- 1.2: remember the roster the game loads ----------------
+/* ---------------- 1.1: remember the roster the game loads ----------------
  * The game's own CreateFileA / ReadFile (import hooks, chained by SLAM with any other mod that follows them).
  * A roster counts as loaded when 256 KB of one .ROS were read: the Load Roster list only reads the headers. */
 typedef HANDLE (WINAPI *CreateFileA_t)(LPCSTR, DWORD, DWORD, LPVOID, DWORD, DWORD, HANDLE);
@@ -671,6 +702,7 @@ int mod_start(void)
     const char *ini;
     int i;
     InitializeCriticalSection(&g_lk);
+    g_t0 = GetTickCount();
     lstrcpynA(g_log, g_slam->mod_dir(g_slamMe), MAX_PATH); lstrcatA(g_log, "RosterLoader.log"); DeleteFileA(g_log);
     rlog("RosterLoader " MOD_VERSION);
     ini = g_slam->mod_ini(g_slamMe);
@@ -686,7 +718,7 @@ int mod_start(void)
         rlog("RosterLoader.ini made - put your roster file name after AutoLoad=");
     }
     GetPrivateProfileStringA("RosterLoader", "AutoLoad", "", g_name, MAX_PATH, ini);
-    if (GetPrivateProfileIntA("RosterLoader", "AutoLoadLast", -1, ini) == (UINT)-1)        /* older ini: add the key */
+    if (GetPrivateProfileIntA("RosterLoader", "AutoLoadLast", -1, ini) == (UINT)-1)        /* 1.0 ini: add the key */
         WritePrivateProfileStringA("RosterLoader", "AutoLoadLast", "1", ini);
     cfg_last = (int)GetPrivateProfileIntA("RosterLoader", "AutoLoadLast", 1, ini);
     GetPrivateProfileStringA("RosterLoader", "LastLoaded", "", g_lastSaved, MAX_PATH, ini);
@@ -718,6 +750,7 @@ int mod_start(void)
     CreateThread(0, 0, rs_keys, 0, 0, 0);
 #endif
     if (!g_name[0] && !cfg_srv && cfg_home == 10 && cfg_away == 25) return 0;
+    CreateThread(0, 0, watch_code, 0, 0, 0);
     if (!SLAM_HAS(g_slam, on_game_ready) || g_slam->on_game_ready(g_slamMe, game_ready, 0) != SLAM_OK) game_ready(0);
     return 0;
 }

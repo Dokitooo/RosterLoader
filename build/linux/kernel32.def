@@ -54,3 +54,4 @@ EXPORTS
     InterlockedIncrement@4
     GetSystemDirectoryA@8
 GetEnvironmentVariableA@12
+    GetWindowsDirectoryA@8
