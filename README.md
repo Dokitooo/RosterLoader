@@ -1,9 +1,9 @@
-# RosterLoader 1.2.1 — your roster loaded at boot in NBA 2K14 (PC)
+# RosterLoader 1.2.2 — your roster loaded at boot in NBA 2K14 (PC)
 
 RosterLoader loads your roster when the game starts (about half a second, no boxes), remembers the roster you last loaded in the game, hides the "2K Sports server is temporarily unavailable" box on the title page, and lets you set your own Play Now default teams. It is a [SLAM](https://github.com/Dokitooo/SLAM) mod.
 
-**Download:** [RosterLoader_v1.2.1.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.2.1/RosterLoader_v1.2.1.zip) (latest release) ·
-[RosterLoader_v1.2.1_plain.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.2.1/RosterLoader_v1.2.1_plain.zip) (plain `.asi`, no SLAM) ·
+**Download:** [RosterLoader_v1.2.2.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.2.2/RosterLoader_v1.2.2.zip) (latest release) ·
+[RosterLoader_v1.2.2_plain.zip](https://github.com/Dokitooo/RosterLoader/releases/download/v1.2.2/RosterLoader_v1.2.2_plain.zip) (plain `.asi`, no SLAM) ·
 [all releases](https://github.com/Dokitooo/RosterLoader/releases)
 
 ## Requirements
@@ -19,11 +19,11 @@ RosterLoader loads your roster when the game starts (about half a second, no box
    SLAM\RosterLoader\RosterLoader.asi
    SLAM\RosterLoader\RosterLoader.ini
    ```
-3. Start the game. The mod list at the top left shows `RosterLoader 1.2.1`.
+3. Start the game. The mod list at the top left shows `RosterLoader 1.2.2`.
 
 Load your roster in the game once (Options > Load/Save > Load Roster): from then on it loads by itself at every start. To always load one fixed roster instead, set `AutoLoad=` in `RosterLoader.ini` to its `.ROS` file name from the Saves folder. The game window may be in the background while it boots (alt-tab); Enter reaches the game directly.
 
-Not using SLAM? `RosterLoader_v1.2.1_plain.zip` is the same mod as a plain `.asi` for any ASI loader. Put `plain\RosterLoader.asi` where your loader reads `.asi` files and the `plain\RosterLoader\` folder (the ini) next to it.
+Not using SLAM? `RosterLoader_v1.2.2_plain.zip` is the same mod as a plain `.asi` for any ASI loader. Put `plain\RosterLoader.asi` where your loader reads `.asi` files and the `plain\RosterLoader\` folder (the ini) next to it.
 
 The log is `SLAM\RosterLoader\RosterLoader.log`. To remove the mod, delete `SLAM\RosterLoader`.
 
@@ -45,6 +45,7 @@ The log is `SLAM\RosterLoader\RosterLoader.log`. To remove the mod, delete `SLAM
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.2.2 | 2026-11-16 | Smoother on slow PCs: outside the roster load at boot, the game's clock (read thousands of times a second) is no longer locked on every read; file reads that are not a roster pass straight through |
 | 1.2.1 | 2026-11-15 | Works next to ReShade / ENB (a `d3d9.dll` in the game folder): the hidden "Loading Roster" box uses the Windows `d3d9.dll` underneath and leaves the wrapper alone; set up before the game makes its Direct3D device, so the box is hidden in fullscreen too |
 | 1.2 | 2026-11-14 | Remembers the roster you load in the game and loads it at the next start (`AutoLoadLast`, `LastLoaded`); `AutoLoad` is empty by default |
 | 1.0 | 2026-11-09 | First release: roster at boot, no server box, Play Now default teams |
@@ -74,7 +75,7 @@ Every release lists the SHA-256 of the zip in `SHA256SUMS.txt` (also attached to
 Compare it with the hash of the file you downloaded:
 
 ```powershell
-Get-FileHash .\RosterLoader_v1.2.1.zip -Algorithm SHA256
+Get-FileHash .\RosterLoader_v1.2.2.zip -Algorithm SHA256
 ```
 
 ```bash

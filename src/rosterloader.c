@@ -56,6 +56,7 @@ typedef BOOL (WINAPI *QPC_t)(LARGE_INTEGER *);
 static QPC_t g_qpc; static volatile int g_warp; static int cfg_warp = 8;
 static long long g_qOff, g_qBaseReal, g_qBaseOut, g_qLast;
 static CRITICAL_SECTION g_qlk;
+static volatile int g_qFast;   /* 1.2.2: no warp running and none pending - the clock is the real one + a fixed offset */
 static BOOL WINAPI MyQPC(LARGE_INTEGER *o)
 {
     long long r, v; BOOL ok;
@@ -63,6 +64,9 @@ static BOOL WINAPI MyQPC(LARGE_INTEGER *o)
     ok = g_qpc(o);
     if (!ok || !o) return ok;
     r = o->QuadPart;
+    /* 1.2.2 (review): the game reads this clock thousands of times a second from several threads; outside a roster
+     * load there is nothing to do but add the fixed offset - no lock (it made every reader wait for the others) */
+    if (g_qFast) { o->QuadPart = r + g_qOff; return ok; }
     EnterCriticalSection(&g_qlk);
     if (g_warp) {
         if (!g_qBaseReal) { g_qBaseReal = r; g_qBaseOut = r + g_qOff; }
@@ -73,6 +77,7 @@ static BOOL WINAPI MyQPC(LARGE_INTEGER *o)
     }
     if (v < g_qLast) v = g_qLast;
     g_qLast = v;
+    if (!g_warp && !g_qBaseReal && v == r + g_qOff) g_qFast = 1;   /* back to real time + offset: lock-free from now */
     LeaveCriticalSection(&g_qlk);
     o->QuadPart = v;
     return ok;
@@ -379,7 +384,7 @@ static void do_load(const char *why)
 {
     DWORD t = GetTickCount(); int rc;
     rlog("loading \"%s\" (%s) ...", g_name, why);
-    g_dropped = 0; g_enters = 0; g_diEnters = 0; g_fellBack = 0; g_loadT0 = GetTickCount(); g_hide = g_origPresent != 0; g_warp = g_hide && g_qpc && cfg_warp > 1; g_inLoad = g_origMsg != 0;
+    g_dropped = 0; g_enters = 0; g_diEnters = 0; g_fellBack = 0; g_loadT0 = GetTickCount(); g_hide = g_origPresent != 0; g_qFast = 0; g_warp = g_hide && g_qpc && cfg_warp > 1; g_inLoad = g_origMsg != 0;
     rc = ((Load_t)0x004E9300u)(0, 0, 0, g_wname);
     g_hide = 0; g_warp = 0; g_inLoad = 0; g_loadEnd = GetTickCount();
     if (g_origPresent) { if (g_keybd) g_keybd(VK_RETURN, 0x1C, KEYEVENTF_KEYUP, 0);
@@ -648,6 +653,8 @@ static BOOL WINAPI hk_ReadFile(HANDLE h, LPVOID b, DWORD n, LPDWORD rd, LPVOID o
 {
     BOOL r = o_ReadFile(h, b, n, rd, ov); int i, fire = 0; char key[MAX_PATH];
     if (r && h) {
+        for (i = 0; i < 8 && g_tr[i].h != h; i++) continue;   /* 1.2.2: no lock for files we don't follow (almost all reads) */
+        if (i == 8) return r;
         EnterCriticalSection(&g_tlk);
         for (i = 0; i < 8; i++) if (g_tr[i].h == h) {
             g_tr[i].bytes += rd ? *rd : n;
